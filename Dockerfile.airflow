@@ -1,0 +1,98 @@
+FROM apache/airflow:2.9.3-python3.11
+
+# ============================================================
+# ROOT USER
+# ============================================================
+
+USER root
+
+# ============================================================
+# SYSTEM DEPENDENCIES
+# ============================================================
+
+RUN apt-get update && \
+    apt-get install -y \
+        curl \
+        procps \
+        openjdk-17-jre-headless \
+    && \
+    rm -rf /var/lib/apt/lists/*
+
+# ============================================================
+# JAVA
+# ============================================================
+
+ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+
+# ============================================================
+# SPARK
+# ============================================================
+
+ENV SPARK_VERSION=3.5.1
+ENV SPARK_HOME=/opt/spark
+
+ENV PATH=/opt/spark/bin:/opt/spark/sbin:/home/airflow/.local/bin:/usr/local/bin:/usr/bin:/bin
+
+# ============================================================
+# DOWNLOAD SPARK 3.5.1
+# ============================================================
+
+RUN curl -fL \
+    --retry 10 \
+    --retry-delay 5 \
+    --retry-max-time 600 \
+    https://archive.apache.org/dist/spark/spark-3.5.1/spark-3.5.1-bin-hadoop3.tgz \
+    -o /tmp/spark.tgz \
+    && \
+    tar -xzf /tmp/spark.tgz -C /opt \
+    && \
+    mv /opt/spark-3.5.1-bin-hadoop3 /opt/spark \
+    && \
+    rm -f /tmp/spark.tgz
+
+# ============================================================
+# POSTGRESQL JDBC DRIVER
+# ============================================================
+
+RUN curl -fL \
+    --retry 10 \
+    --retry-delay 5 \
+    --retry-max-time 300 \
+    https://jdbc.postgresql.org/download/postgresql-42.7.7.jar \
+    -o /opt/spark/jars/postgresql-42.7.7.jar
+
+# ============================================================
+# SPARK PERMISSIONS
+# ============================================================
+
+RUN chown -R airflow:root /opt/spark
+
+# ============================================================
+# AIRFLOW PYTHON PACKAGES
+# ============================================================
+
+USER airflow
+
+RUN python -m pip install --no-cache-dir \
+    pandas \
+    pyarrow \
+    numpy \
+    scipy \
+    scikit-learn \
+    kafka-python \
+    psycopg2-binary
+
+# ============================================================
+# FINAL ENVIRONMENT
+# ============================================================
+
+ENV PATH=/opt/spark/bin:/opt/spark/sbin:/home/airflow/.local/bin:/usr/local/bin:/usr/bin:/bin
+
+# ============================================================
+# VERIFY AIRFLOW AND SPARK
+# ============================================================
+
+RUN command -v airflow && \
+    airflow version && \
+    command -v spark-submit && \
+    spark-submit --version
